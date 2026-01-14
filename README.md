@@ -1,0 +1,1 @@
+dotnet run -- "C:\coding\c# demo\FirstClass.cs" DoSomething

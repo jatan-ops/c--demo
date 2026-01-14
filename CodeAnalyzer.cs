@@ -10,10 +10,18 @@ namespace SimpleProject
 {
   public class CodeAnalyzer
   {
-    public void AnalyzeDoSomethingMethod(string filePath)
+    public void AnalyzeMethod(string filePath, string methodName)
     {
+      // Use the absolute file path provided
+      string fullFilePath = Path.GetFullPath(filePath);
+      if (!File.Exists(fullFilePath))
+      {
+        Console.WriteLine($"File not found: {fullFilePath}");
+        return;
+      }
+      
       // Get the directory containing the file
-      string? directory = Path.GetDirectoryName(Path.GetFullPath(filePath));
+      string? directory = Path.GetDirectoryName(fullFilePath);
       if (string.IsNullOrEmpty(directory))
       {
         Console.WriteLine("Could not determine directory!");
@@ -24,7 +32,6 @@ namespace SimpleProject
       var csFiles = Directory.GetFiles(directory, "*.cs");
       var syntaxTrees = new List<SyntaxTree>();
       SyntaxTree? mainTree = null;
-      string fullFilePath = Path.GetFullPath(filePath);
       
       foreach (var csFile in csFiles)
       {
@@ -84,45 +91,44 @@ namespace SimpleProject
         return userDefinedTypes.Contains(containingType);
       }
       
-      // Find the FirstClass
-      var firstClass = root.DescendantNodes()
-        .OfType<ClassDeclarationSyntax>()
-        .FirstOrDefault(c => c.Identifier.ValueText == "FirstClass");
+      // Find the method in the specified file
+      MethodDeclarationSyntax? seedMethod = null;
+      IMethodSymbol? seedMethodSymbol = null;
+      
+      // Search all classes in the main file for the specified method
+      foreach (var classDecl in root.DescendantNodes().OfType<ClassDeclarationSyntax>())
+      {
+        var methodDecl = classDecl.DescendantNodes()
+          .OfType<MethodDeclarationSyntax>()
+          .FirstOrDefault(m => m.Identifier.ValueText == methodName);
+        
+        if (methodDecl != null)
+        {
+          seedMethod = methodDecl;
+          var symbol = semanticModel.GetDeclaredSymbol(methodDecl) as IMethodSymbol;
+          if (symbol != null)
+          {
+            seedMethodSymbol = symbol;
+            break;
+          }
+        }
+      }
 
-      if (firstClass == null)
+      if (seedMethod == null || seedMethodSymbol == null)
       {
-        Console.WriteLine("FirstClass not found!");
+        Console.WriteLine($"Method '{methodName}' not found in file: {fullFilePath}");
         return;
       }
       
-      // Find the DoSomething method
-      var doSomethingMethod = firstClass.DescendantNodes()
-        .OfType<MethodDeclarationSyntax>()
-        .FirstOrDefault(m => m.Identifier.ValueText == "DoSomething");
-
-      if (doSomethingMethod == null)
-      {
-        Console.WriteLine("DoSomething method not found!");
-        return;
-      }
-      
-      //! Get the semantic model for DoSomething method
-      var doSomethingSymbol = semanticModel.GetDeclaredSymbol(doSomethingMethod) as IMethodSymbol;
-      if (doSomethingSymbol == null)
-      {
-        Console.WriteLine("Could not get DoSomething symbol!");
-        return;
-      }
-      
-      Console.WriteLine("=== Recursive Analysis Starting from DoSomething Method ===\n");
+      Console.WriteLine($"=== Recursive Analysis Starting from {seedMethodSymbol.ContainingType.Name}.{methodName} Method ===\n");
       
       // Initialize sets to track all symbols found and resolved
       var allFoundMethods = new HashSet<IMethodSymbol>(SymbolEqualityComparer.Default);
       var allFoundProperties = new HashSet<IPropertySymbol>(SymbolEqualityComparer.Default);
       var resolvedMethods = new HashSet<IMethodSymbol>(SymbolEqualityComparer.Default);
       
-      // Add DoSomething to the found methods list
-      allFoundMethods.Add(doSomethingSymbol);
+      // Add seed method to the found methods list
+      allFoundMethods.Add(seedMethodSymbol);
       
       //! Recursively analyze methods until all are resolved
       while (true)

@@ -6,21 +6,26 @@ namespace SimpleProject
   {
     static void Main(string[] args)
     {
-      Console.WriteLine("Starting the application...\n");
+      // Check command line arguments
+      if (args.Length < 2)
+      {
+        Console.WriteLine("Usage: SimpleProject.exe <filePath> <methodName>");
+        Console.WriteLine("Example: SimpleProject.exe \"C:\\coding\\c# demo\\FirstClass.cs\" DoSomething");
+        return;
+      }
       
-      // Create an instance of FirstClass
-      FirstClass first = new FirstClass();
+      string filePath = args[0];
+      string methodName = args[1];
       
-      // Call the method that uses SecondClass
-      first.DoSomething();
+      Console.WriteLine($"Starting analysis...");
+      Console.WriteLine($"File: {filePath}");
+      Console.WriteLine($"Method: {methodName}\n");
       
-      Console.WriteLine("\n" + new string('=', 50) + "\n");
-      
-      // Analyze the DoSomething method using Roslyn
+      // Analyze the method using Roslyn
       CodeAnalyzer analyzer = new CodeAnalyzer();
-      analyzer.AnalyzeDoSomethingMethod("FirstClass.cs");
+      analyzer.AnalyzeMethod(filePath, methodName);
       
-      Console.WriteLine("\nApplication completed.");
+      Console.WriteLine("\nAnalysis completed.");
     }
   }
 }
