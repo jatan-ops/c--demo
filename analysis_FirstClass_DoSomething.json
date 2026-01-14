@@ -1,0 +1,39 @@
+{
+  "seedFile": "C:\\coding\\c# demo\\FirstClass.cs",
+  "seedMethod": "DoSomething",
+  "properties": [
+    {
+      "name": "Name",
+      "containingType": "SecondClass",
+      "fullName": "SecondClass.Name",
+      "type": "string",
+      "location": "SourceFile(C:\\coding\\c# demo\\SecondClass.cs[150..154))"
+    }
+  ],
+  "methods": [
+    {
+      "name": "DoSomething",
+      "containingType": "FirstClass",
+      "fullName": "FirstClass.DoSomething()",
+      "returnType": "void",
+      "parameters": [],
+      "location": "SourceFile(C:\\coding\\c# demo\\FirstClass.cs[93..104))"
+    },
+    {
+      "name": "GetMessage",
+      "containingType": "SecondClass",
+      "fullName": "SecondClass.GetMessage()",
+      "returnType": "string",
+      "parameters": [],
+      "location": "SourceFile(C:\\coding\\c# demo\\SecondClass.cs[328..338))"
+    },
+    {
+      "name": "ProcessData",
+      "containingType": "ThirdClass",
+      "fullName": "ThirdClass.ProcessData()",
+      "returnType": "string",
+      "parameters": [],
+      "location": "SourceFile(C:\\coding\\c# demo\\ThirdClass.cs[95..106))"
+    }
+  ]
+}

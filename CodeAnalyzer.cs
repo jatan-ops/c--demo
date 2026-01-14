@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -247,6 +248,48 @@ namespace SimpleProject
       {
         Console.WriteLine("  (none)");
       }
+      
+      // Create JSON output
+      var outputData = new
+      {
+        seedFile = fullFilePath,
+        seedMethod = methodName,
+        properties = allFoundProperties.Select(p => new
+        {
+          name = p.Name,
+          containingType = p.ContainingType.Name,
+          fullName = $"{p.ContainingType.Name}.{p.Name}",
+          type = p.Type.ToString(),
+          location = p.Locations.FirstOrDefault()?.ToString() ?? "unknown"
+        }).OrderBy(p => p.fullName).ToList(),
+        methods = allFoundMethods.Select(m => new
+        {
+          name = m.Name,
+          containingType = m.ContainingType.Name,
+          fullName = $"{m.ContainingType.Name}.{m.Name}()",
+          returnType = m.ReturnType.ToString(),
+          parameters = m.Parameters.Select(p => new
+          {
+            name = p.Name,
+            type = p.Type.ToString()
+          }).ToList(),
+          location = m.Locations.FirstOrDefault()?.ToString() ?? "unknown"
+        }).OrderBy(m => m.fullName).ToList()
+      };
+      
+      // Serialize to JSON
+      var jsonOptions = new JsonSerializerOptions
+      {
+        WriteIndented = true
+      };
+      string json = JsonSerializer.Serialize(outputData, jsonOptions);
+      
+      // Write to file
+      string outputFileName = $"analysis_{Path.GetFileNameWithoutExtension(fullFilePath)}_{methodName}.json";
+      string outputPath = Path.Combine(directory, outputFileName);
+      File.WriteAllText(outputPath, json);
+      
+      Console.WriteLine($"\nAnalysis results saved to: {outputPath}");
     }
   }
 }
