@@ -14,6 +14,9 @@ namespace SimpleProject
       // Access a property from SecondClass
       Console.WriteLine($"FirstClass: Accessing property from SecondClass - Name: {second.Name}");
       
+      // Access integer property from SecondClass
+      Console.WriteLine($"FirstClass: Accessing integer property from SecondClass - Id: {second.Id}");
+      
       // Call a method from SecondClass
       string result = second.GetMessage();
       

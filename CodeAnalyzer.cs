@@ -12,18 +12,82 @@ namespace SimpleProject
   {
     public void AnalyzeDoSomethingMethod(string filePath)
     {
-      // Read the source file
-      string sourceCode = File.ReadAllText(filePath);
+      // Get the directory containing the file
+      string? directory = Path.GetDirectoryName(Path.GetFullPath(filePath));
+      if (string.IsNullOrEmpty(directory))
+      {
+        Console.WriteLine("Could not determine directory!");
+        return;
+      }
       
-      // Parse the code into a syntax tree
-      SyntaxTree tree = CSharpSyntaxTree.ParseText(sourceCode);
-      CompilationUnitSyntax root = tree.GetCompilationUnitRoot();
+      // Read all C# files in the directory to include in compilation
+      var csFiles = Directory.GetFiles(directory, "*.cs");
+      var syntaxTrees = new List<SyntaxTree>();
+      SyntaxTree? mainTree = null;
+      string fullFilePath = Path.GetFullPath(filePath);
+      
+      foreach (var csFile in csFiles)
+      {
+        string sourceCode = File.ReadAllText(csFile);
+        var tree = CSharpSyntaxTree.ParseText(sourceCode, path: csFile);
+        syntaxTrees.Add(tree);
+        
+        // Find the main file's syntax tree
+        if (Path.GetFullPath(csFile).Equals(fullFilePath, StringComparison.OrdinalIgnoreCase))
+        {
+          mainTree = tree;
+        }
+      }
+      
+      if (mainTree == null)
+      {
+        Console.WriteLine("Could not find the main file in the compilation!");
+        return;
+      }
+      
+      CompilationUnitSyntax root = mainTree.GetCompilationUnitRoot();
+      
+      // Create a compilation with references to enable semantic analysis
+      var references = new MetadataReference[]
+      {
+        MetadataReference.CreateFromFile(typeof(object).Assembly.Location),
+        MetadataReference.CreateFromFile(typeof(Console).Assembly.Location)
+      };
+      
+      var compilation = CSharpCompilation.Create("TempAssembly", syntaxTrees, references);
+      var semanticModel = compilation.GetSemanticModel(mainTree);
+      
+      //! Get all types defined in the current compilation (user-defined classes)
+      var userDefinedTypes = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
+      foreach (var tree in syntaxTrees)
+      {
+        var model = compilation.GetSemanticModel(tree);
+        var treeRoot = tree.GetCompilationUnitRoot();
+        foreach (var classDecl in treeRoot.DescendantNodes().OfType<ClassDeclarationSyntax>())
+        {
+          var classSymbol = model.GetDeclaredSymbol(classDecl);
+          if (classSymbol != null)
+          {
+            userDefinedTypes.Add(classSymbol);
+          }
+        }
+      }
+      
+      // Helper method to check if a symbol belongs to a user-defined type
+      bool IsUserDefinedType(ISymbol? symbol)
+      {
+        if (symbol == null) return false;
+        var containingType = symbol.ContainingType;
+        if (containingType == null) return false;
+        
+        // Check if the containing type is in our user-defined types
+        return userDefinedTypes.Contains(containingType);
+      }
       
       // Find the FirstClass
       var firstClass = root.DescendantNodes()
         .OfType<ClassDeclarationSyntax>()
         .FirstOrDefault(c => c.Identifier.ValueText == "FirstClass");
-      // find first class from syntax tree
 
       if (firstClass == null)
       {
@@ -35,7 +99,6 @@ namespace SimpleProject
       var doSomethingMethod = firstClass.DescendantNodes()
         .OfType<MethodDeclarationSyntax>()
         .FirstOrDefault(m => m.Identifier.ValueText == "DoSomething");
-      // find do something method from first class
 
       if (doSomethingMethod == null)
       {
@@ -43,52 +106,121 @@ namespace SimpleProject
         return;
       }
       
-      Console.WriteLine("=== Analysis of DoSomething Method ===\n");
-      
-      // Collect properties and methods
-      var properties = new List<string>();
-      var methods = new List<string>();
-      
-      // Analyze all member access expressions and invocations in do something method
-      var memberAccesses = doSomethingMethod.DescendantNodes()
-        .OfType<MemberAccessExpressionSyntax>();
-      
-      var invocations = doSomethingMethod.DescendantNodes()
-        .OfType<InvocationExpressionSyntax>();
-      
-      foreach (var memberAccess in memberAccesses)
+      //! Get the semantic model for DoSomething method
+      var doSomethingSymbol = semanticModel.GetDeclaredSymbol(doSomethingMethod) as IMethodSymbol;
+      if (doSomethingSymbol == null)
       {
-        string memberName = memberAccess.Name.Identifier.ValueText;
-        string expression = memberAccess.Expression.ToString();
-        
-        // Check if it's a property access (not followed by parentheses)
-        if (!memberAccess.Parent.IsKind(SyntaxKind.InvocationExpression))
-        {
-          properties.Add($"{expression}.{memberName}");
-        }
+        Console.WriteLine("Could not get DoSomething symbol!");
+        return;
       }
       
-      foreach (var invocation in invocations)
+      Console.WriteLine("=== Recursive Analysis Starting from DoSomething Method ===\n");
+      
+      // Initialize sets to track all symbols found and resolved
+      var allFoundMethods = new HashSet<IMethodSymbol>(SymbolEqualityComparer.Default);
+      var allFoundProperties = new HashSet<IPropertySymbol>(SymbolEqualityComparer.Default);
+      var resolvedMethods = new HashSet<IMethodSymbol>(SymbolEqualityComparer.Default);
+      
+      // Add DoSomething to the found methods list
+      allFoundMethods.Add(doSomethingSymbol);
+      
+      //! Recursively analyze methods until all are resolved
+      while (true)
       {
-        if (invocation.Expression is MemberAccessExpressionSyntax memberAccess)
+        //! Find first unresolved method
+        var unresolvedMethod = allFoundMethods.FirstOrDefault(m => !resolvedMethods.Contains(m));
+        
+        if (unresolvedMethod == null)
         {
-          string methodName = memberAccess.Name.Identifier.ValueText;
-          string expression = memberAccess.Expression.ToString();
-          methods.Add($"{expression}.{methodName}()");
+          // All methods are resolved
+          break;
         }
-        else if (invocation.Expression is IdentifierNameSyntax identifier)
+        
+        //! Mark this method as resolved
+        resolvedMethods.Add(unresolvedMethod);
+        
+        // Find the method declaration syntax for this symbol
+        MethodDeclarationSyntax? methodSyntax = null;
+        SemanticModel? methodSemanticModel = null;
+        
+        foreach (var tree in syntaxTrees)
         {
-          methods.Add($"{identifier.Identifier.ValueText}()");
+          var model = compilation.GetSemanticModel(tree);
+          var treeRoot = tree.GetCompilationUnitRoot();
+          
+          foreach (var methodDecl in treeRoot.DescendantNodes().OfType<MethodDeclarationSyntax>())
+          {
+            var methodSymbol = model.GetDeclaredSymbol(methodDecl) as IMethodSymbol;
+            if (methodSymbol != null && SymbolEqualityComparer.Default.Equals(methodSymbol, unresolvedMethod))
+            {
+              methodSyntax = methodDecl;
+              methodSemanticModel = model;
+              break;
+            }
+          }
+          
+          if (methodSyntax != null) break;
+        }
+        
+        if (methodSyntax == null || methodSemanticModel == null)
+        {
+          // Could not find method declaration, skip it
+          continue;
+        }
+        
+        // Analyze this method to find properties and methods it accesses/calls
+        var memberAccesses = methodSyntax.DescendantNodes().OfType<MemberAccessExpressionSyntax>();
+        var invocations = methodSyntax.DescendantNodes().OfType<InvocationExpressionSyntax>();
+        
+        //! Process property accesses
+        foreach (var memberAccess in memberAccesses)
+        {
+          // Check if it's a property access (not followed by parentheses)
+          if (!memberAccess.Parent.IsKind(SyntaxKind.InvocationExpression))
+          {
+            var symbolInfo = methodSemanticModel.GetSymbolInfo(memberAccess);
+            if (symbolInfo.Symbol is IPropertySymbol propertySymbol)
+            {
+              // Only add if the property type is string AND it belongs to a user-defined type
+              if (propertySymbol.Type.SpecialType == SpecialType.System_String && 
+                  IsUserDefinedType(propertySymbol))
+              {
+                allFoundProperties.Add(propertySymbol);
+              }
+            }
+          }
+        }
+        
+        //! Process method invocations
+        foreach (var invocation in invocations)
+        {
+          if (invocation.Expression is MemberAccessExpressionSyntax memberAccess)
+          {
+            var symbolInfo = methodSemanticModel.GetSymbolInfo(memberAccess);
+            if (symbolInfo.Symbol is IMethodSymbol methodSymbol && IsUserDefinedType(methodSymbol))
+            {
+              allFoundMethods.Add(methodSymbol);
+            }
+          }
+          else if (invocation.Expression is IdentifierNameSyntax identifier)
+          {
+            var symbolInfo = methodSemanticModel.GetSymbolInfo(identifier);
+            if (symbolInfo.Symbol is IMethodSymbol methodSymbol && IsUserDefinedType(methodSymbol))
+            {
+              allFoundMethods.Add(methodSymbol);
+            }
+          }
         }
       }
       
       // Display results
       Console.WriteLine("Properties Accessed:");
-      if (properties.Count > 0)
+      if (allFoundProperties.Count > 0)
       {
-        foreach (var prop in properties.Distinct())
+        foreach (var prop in allFoundProperties)
         {
-          Console.WriteLine($"  - {prop}");
+          string displayName = $"{prop.ContainingType.Name}.{prop.Name}";
+          Console.WriteLine($"  - {displayName}");
         }
       }
       else
@@ -97,11 +229,12 @@ namespace SimpleProject
       }
       
       Console.WriteLine("\nMethods Called:");
-      if (methods.Count > 0)
+      if (allFoundMethods.Count > 0)
       {
-        foreach (var method in methods.Distinct())
+        foreach (var method in allFoundMethods)
         {
-          Console.WriteLine($"  - {method}");
+          string displayName = $"{method.ContainingType.Name}.{method.Name}()";
+          Console.WriteLine($"  - {displayName}");
         }
       }
       else

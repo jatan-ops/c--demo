@@ -7,6 +7,9 @@ namespace SimpleProject
     // Property that can be accessed from FirstClass
     public string Name { get; set; } = "SecondClass Instance";
     
+    // Integer property that can be accessed from FirstClass
+    public int Id { get; set; } = 100;
+    
     public string GetMessage()
     {
       Console.WriteLine("SecondClass: GetMessage() method called!");
